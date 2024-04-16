@@ -75,6 +75,7 @@
 #include <morpherdfggen/dfg/DFGDISE.h>
 #include <morpherdfggen/dfg/DFGFullPred.h>
 #include <morpherdfggen/dfg/DFGPartPred.h>
+#include <morpherdfggen/dfg/DFG3DRA.h>
 #include <morpherdfggen/dfg/DFGTrig.h>
 #include <morpherdfggen/dfg/DFGTrMap.h>
 #include <morpherdfggen/common/edge.h>
@@ -249,7 +250,7 @@ void traverseDefTree(Instruction *I,
 					LLVM_DEBUG(I->dump());
 					LLVM_DEBUG(Inst->dump());
 					continue;
-				}
+				} 
 			}
 
 			currBBDFG->findNode(I)->addChild(Inst);
@@ -2003,6 +2004,7 @@ void AllocateSPMBanks(std::unordered_set<Value *> &outer_vals,
 #ifdef ARCHI_16BIT
 			assert(size/2 <= bank_size);
 #else
+			std::cerr << "size = " << size << "; bank_size = " << bank_size << "\n";
 			assert(size <= bank_size);
 #endif
 			variable_sizes_bytes[gep->getPointerOperand()] = size;
@@ -2261,7 +2263,14 @@ struct dfggenPass : public FunctionPass
 		//-----------------------------------
 		{
 			DFG *LoopDFG;
-			if (dfgType == "PartPred")
+			if (dfgType == "3DRA")
+			{
+				LoopDFG = new DFG3DRA(F.getName().str() + "_" + munitName, &loopNames, mappingUnitMap[munitName].lp);
+				DFG3DRA *LoopDFG_PP = static_cast<DFG3DRA *>(LoopDFG);
+				LoopDFG->setKernelName(F.getName().str());
+				LoopDFG_PP->SE = SE;
+			}
+			else if (dfgType == "PartPred")
 			{
 				LoopDFG = new DFGPartPred(F.getName().str() + "_" + munitName, &loopNames, mappingUnitMap[munitName].lp);
 				DFGPartPred *LoopDFG_PP = static_cast<DFGPartPred *>(LoopDFG);
@@ -2351,7 +2360,7 @@ struct dfggenPass : public FunctionPass
 #ifdef REMOVE_AGI
 			return true;
 #endif
-			if(dfgType == "PartPred"){
+			if(dfgType == "PartPred" || dfgType == "3DRA"){
 				std::unordered_set<Value *> outVals;
 				std::unordered_map<Value *, GetElementPtrInst *> arrPtrs;
 				std::unordered_map<Value *, int> mem_acceses; // base pointer name : number of memory accesses
@@ -2424,7 +2433,7 @@ struct dfggenPass : public FunctionPass
 			//std::cout << "Code instrumentation done \n";
 
 			LLVM_DEBUG(dbgs() << "\n[Skeleton.cpp][PrintOuts] begin\n");
-			LoopDFG->PrintOuts();
+			// LoopDFG->PrintOuts();
 			LLVM_DEBUG(dbgs() << "\n[Skeleton.cpp][PrintOuts] end\n");
 			delete (LoopDFG);
 			LLVM_DEBUG(dbgs() << "dfgType=" << dfgType << "\n");

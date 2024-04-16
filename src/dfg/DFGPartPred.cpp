@@ -1599,6 +1599,7 @@ void DFGPartPred::printNewDFGXML() {
 	}
 
 
+	xmlFile << "<xml>\n";
 	xmlFile << "<MutexBB>\n";
 	for(std::pair<BasicBlock*,std::set<BasicBlock*>> pair : mBBs){
 		BasicBlock* first = pair.first;
@@ -1643,9 +1644,9 @@ void DFGPartPred::printNewDFGXML() {
 		//		    }
 
 		//		    xmlFile << "BB=\"" << node->BB->getName().str() << "\"";
-		xmlFile << "BB=\"" << nodeBBModified[node] << "\"";
+		xmlFile << " BB=\"" << nodeBBModified[node] << "\"";
 		if(node->hasConstantVal()){
-			xmlFile << "CONST=\"" << node->getConstantVal() << "\"";
+			xmlFile << " CONST=\"" << node->getConstantVal() << "\"";
 		}
 		xmlFile << ">\n";
 
@@ -1859,16 +1860,9 @@ void DFGPartPred::printNewDFGXML() {
 
 
 	xmlFile << "</DFG>\n";
-
-
-
-
+	xmlFile << "</xml>\n";
 
 	xmlFile.close();
-
-
-
-
 }
 
 int DFGPartPred::classifyParents() {
