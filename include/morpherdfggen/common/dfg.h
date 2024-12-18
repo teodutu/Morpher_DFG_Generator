@@ -17,11 +17,10 @@
 #include <morpherdfggen/arch/CGRANode.h>
 #include <morpherdfggen/common/dfgnode.h>
 #include <morpherdfggen/common/edge.h>
-
+#include <morpherdfggen/common/ArchPrecision.h>
 
 #define REGS_PER_NODE 4
-//Uncomment this if compiling for PACE0.5
-#define ARCHI_16BIT
+
 extern int MEM_SIZE;
 
 class AStar;

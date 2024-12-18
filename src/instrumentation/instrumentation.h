@@ -4,12 +4,15 @@
 #include <stdlib.h>
 #include <math.h>
 
+
+#include <morpherdfggen/common/ArchPrecision.h>
+
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-//Uncomment this for pace8x8_16bit
-#define ARCHI_16BIT
+
 
 #ifdef ARCHI_16BIT
 	const int bytes_per_variable = 2;
