@@ -11184,7 +11184,13 @@ void DFG::InstrumentInOutVars(Function &F, std::unordered_map<Value *, int> mem_
 		LLVM_DEBUG(dbgs() << "size = " << size << "\n");
 
 		Value* ptr_name_val = builder.CreateGlobalStringPtr(ptr->getName());
-		Value *size_val = ConstantInt::get(Type::getInt32Ty(Ctx), size);
+
+	#ifdef ARCHI_16BIT
+				Value *size_val = ConstantInt::get(Type::getInt32Ty(Ctx), size/2);
+	#else
+				Value *size_val = ConstantInt::get(Type::getInt32Ty(Ctx), size);
+	#endif
+		
 		Value *size_val2 = ConstantInt::get(Type::getInt32Ty(Ctx), size/4);
 		bool isOLNodewithPtrTyUsage = false;
 		for(auto trans : loopentryBB){

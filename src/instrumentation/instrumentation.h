@@ -9,7 +9,16 @@ extern "C" {
 #endif
 
 //Uncomment this for pace8x8_16bit
-//#define ARCHI_16BIT
+#define ARCHI_16BIT
+
+#ifdef ARCHI_16BIT
+	const int bytes_per_variable = 2;
+#else
+	const int bytes_per_variable = 4;
+#endif
+  
+
+
 void printArr(const char* name, uint8_t* arr, int size, uint8_t io, uint32_t addr);
 void reportDynArrSize(const char* name, uint8_t* arr, uint32_t idx_i, int size);
 void printDynArrSize();
@@ -51,6 +60,7 @@ void LiveOutReport(const char* varname, uint8_t* value, uint32_t size);
 void LiveInReportIntermediateVar(const char* varname, uint32_t value);
 void LiveOutReportIntermediateVar(const char* varname, uint32_t value);
 void LiveInReportPtrTypeUsage(const char* varname,const char* varbaseaddr, uint32_t value, uint32_t size);
+
 
 
 #ifdef __cplusplus
