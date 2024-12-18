@@ -8,8 +8,6 @@
 
 //comment this in normal compilation
 //#define REMOVE_AGI
-//Uncomment this if compiling fo the pace0.5 architecture
-//#define ARCHI_16BIT
 
 
 

@@ -682,7 +682,11 @@ void LiveInReportPtrTypeUsage(const char* varname,const char* varbaseaddr, uint3
 //	}
 //	std::string varname_str(varname);
 	uint8_t* value_ptr = (uint8_t*)&addr;
-	for(int i=0; i<4; i++){
+	
+
+
+
+	for(int i=0; i<bytes_per_variable; i++){
 		data_morpher[varname_str].pre_data.push_back(value_ptr[i]);
 		data_morpher[varname_str].post_data.push_back(value_ptr[i]);
 	}
@@ -713,7 +717,7 @@ void LiveOutReport(const char* varname, uint8_t* value, uint32_t size){
 void LiveInReportIntermediateVar(const char* varname, uint32_t value){
 	std::string varname_str(varname);
 	uint8_t* value_ptr = (uint8_t*)&value;
-	for(int i=0; i<4; i++){
+	for(int i=0; i<bytes_per_variable; i++){
 		data_morpher[varname_str].pre_data.push_back(value_ptr[i]);
 		data_morpher[varname_str].post_data.push_back(value_ptr[i]);
 	}
@@ -724,7 +728,7 @@ void LiveOutReportIntermediateVar(const char* varname, uint32_t value){
 	std::string varname_str(varname);
 	//cout << "Call LiveOutReportIntermediateVar var name:" << varname_str << "Value:" <<value << "\n";
 	uint8_t* value_ptr = (uint8_t*)&value;
-	for(int i=0; i<4; i++){
+	for(int i=0; i<bytes_per_variable; i++){
 		data_morpher[varname_str].pre_data.push_back(0);
 		data_morpher[varname_str].post_data.push_back(value_ptr[i]);
 //		data_morpher[varname_str].post_data[i] = value_ptr[i];
