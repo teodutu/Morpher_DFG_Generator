@@ -1,5 +1,4 @@
 #include "../../src/instrumentation/instrumentation.h"
-
 #include <stdio.h>
 #include <stdint.h>
 #include <assert.h>

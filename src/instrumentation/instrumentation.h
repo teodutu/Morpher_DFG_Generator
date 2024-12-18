@@ -5,7 +5,7 @@
 #include <math.h>
 
 
-#include <morpherdfggen/common/ArchPrecision.h>
+#include "../../include/morpherdfggen/common/ArchPrecision.h"
 
 
 #ifdef __cplusplus
