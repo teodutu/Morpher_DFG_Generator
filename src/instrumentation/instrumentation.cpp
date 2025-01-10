@@ -97,6 +97,11 @@ typedef struct{
 
 static std::map<std::string,AddrDataTupleMorpher> data_morpher;
 
+//to support multiple functions with please_map_me. The dfg_generator removes the please_map_me for only target function.
+void please_map_me(){
+	return;
+}
+
 void printArr(const char* name, uint8_t* arr, int size, uint8_t io, uint32_t addr){
 
 	std::string str(name);
@@ -436,6 +441,7 @@ void loopBBInsUpdate(const char* loopName, const char* BBName, int insCount){
 	//2018 Triggered Instruction Work
 	reportNewBBinPath(BBName,loopName);
 }
+
 
 void loopInsClear(const char* name){
 	std::string nameStr(name);

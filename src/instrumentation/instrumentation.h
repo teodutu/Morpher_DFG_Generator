@@ -63,7 +63,7 @@ void LiveOutReport(const char* varname, uint8_t* value, uint32_t size);
 void LiveInReportIntermediateVar(const char* varname, uint32_t value);
 void LiveOutReportIntermediateVar(const char* varname, uint32_t value);
 void LiveInReportPtrTypeUsage(const char* varname,const char* varbaseaddr, uint32_t value, uint32_t size);
-
+void please_map_me();
 
 
 #ifdef __cplusplus
