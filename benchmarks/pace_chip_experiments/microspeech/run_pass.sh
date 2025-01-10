@@ -1,3 +1,4 @@
+mkdir -p memtraces
 rm *_looptrace.log
 rm *_loopinfo.log
 rm *_munittrace.log
