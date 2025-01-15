@@ -2382,6 +2382,8 @@ struct dfggenPass : public FunctionPass
 			LoopDFG->generateTrigDFGDOT(F);
 			LLVM_DEBUG(dbgs() << "[Skeleton.cpp][generateTrigDFGDOT end]\n\n");
 
+			LoopDFG->fixDuplicateNodeIndices();
+
 #ifdef REMOVE_AGI
 			return true;
 #endif

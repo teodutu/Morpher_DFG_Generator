@@ -524,6 +524,7 @@ class DFG{
 			virtual void generateTrigDFGDOT(Function &F){assert(false);}
 			virtual void generateCGRAMEDFGDOT(Function &F){assert(false);}
 			virtual void PrintOuts(){assert(false);}
+			void fixDuplicateNodeIndices();
 
 			void removeDisconnectedNodes();
 			std::unordered_set<dfgNode*> getLineage(dfgNode* n);

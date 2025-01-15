@@ -10,6 +10,7 @@
 #include <morpherdfggen/common/astar.h>
 #include <morpherdfggen/arch/CGRA.h>
 #include <morpherdfggen/util/tinyxml2.h>
+#include <unordered_set>
 
 #define LV_NAME "dfg_gen" //"sfp"
 #define DEBUG_TYPE LV_NAME
@@ -11530,4 +11531,21 @@ int DFG::insertshiftGEPsCorrect(){
 
 	return 0;
 	// assert(false);
+}
+
+void DFG::fixDuplicateNodeIndices(){
+	std::unordered_set<int> indices;
+	//get the maximum indices of all the nodes;
+	int max_index = 0;
+	for (auto node : NodeList) {
+		max_index = std::max(max_index, node->getIdx());
+	}
+
+	for (auto node : NodeList) {
+		if (indices.find(node->getIdx()) != indices.end()) {
+			max_index++;
+			node->setIdx(max_index);
+		}
+		indices.insert(node->getIdx());
+	}
 }
