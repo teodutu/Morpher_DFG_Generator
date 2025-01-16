@@ -60,6 +60,7 @@
 
 #include <iostream>
 #include <fstream>
+#include <llvm/IR/Intrinsics.h>
 #include <string>
 #include <sstream>
 #include <iomanip>
@@ -1982,18 +1983,19 @@ void AllocateSPMBanks(std::unordered_set<Value *> &outer_vals,
 	DataLayout DL = F.getParent()->getDataLayout();
 
 	//for outer vals
-	LLVM_DEBUG(dbgs()<<"For outer values \n");
+	LLVM_DEBUG(dbgs()<<"******** For outer values \n");
 	for (auto it = outer_vals.begin(); it != outer_vals.end(); it++)
 	{
 		Value *outer_val = *it;
 		LLVM_DEBUG(outer_val->dump());
 		int size = DL.getTypeAllocSize(outer_val->getType());
-		LLVM_DEBUG(dbgs() <<" Size:" << size << "/n");
+		LLVM_DEBUG(dbgs() <<" size:" << size << "\n");
 		assert(size <= bank_size); // assume the size of each array is not bigger than the bank size
 		variable_sizes_bytes[outer_val] = size;
 	}
 
 	// for mem ptrs
+	LLVM_DEBUG(dbgs()<<"******** For mem ptrs \n");
 	for (auto it = mem_ptrs.begin(); it != mem_ptrs.end(); it++)
 	{
 		Value *mem_value = it->first;
@@ -2020,59 +2022,60 @@ void AllocateSPMBanks(std::unordered_set<Value *> &outer_vals,
 
 
 
-	std::vector<std::unordered_set<Value*>> banks_vars;
+	std::vector<std::unordered_set<Value*>> vars_in_bank;
 	std::map<Value*, int> value_to_BankId;
-	std::map<int, int> data_in_bank;
+	std::map<int, int> allocated_data_of_bank;
 	for(int i = 0; i < banks_number ; i++){
 		std::unordered_set<Value*> temp;
-		banks_vars.push_back(temp);
-		data_in_bank [i] = 0;
+		vars_in_bank.push_back(temp);
+		allocated_data_of_bank [i] = 0;
 	}
 
 
 	//data placement
 	/*assign acc (arrays and scalars) to memories. It balances the data amount (size) of each bank.
 	Currently don't consider number of accesses for each array. */
+	LLVM_DEBUG(dbgs()<<"******** allocate data to banks now \n");
 	{
-		std::vector<std::pair<int,Value *>> acc_vec; 
+		std::vector<std::pair<int,Value *>> access_vec; 
 		for(auto it = acc.begin(); it != acc.end(); it++){
-			acc_vec.push_back(std::make_pair(variable_sizes_bytes[it->first],it->first));
+			access_vec.push_back(std::make_pair(variable_sizes_bytes[it->first],it->first));
 		}
-		std::sort(acc_vec.rbegin(),acc_vec.rend());
+		std::sort(access_vec.rbegin(),access_vec.rend());
 		
-		int desired_bank = 0;
+		int bank_to_allocate = 0;
 		//for(auto it = acc.begin(); it != acc.end(); it++){
 			//int size = variable_sizes_bytes[it->first];
-		for(auto it:acc_vec){
+		for(auto it:access_vec){
 			int size = it.first;
-			int least_data = data_in_bank[0];
+			int least_data_amount = allocated_data_of_bank[0];
 			if(dp_policy ==0){ //Data placement policy 0 : balances the data amount (size) of each bank.
-				desired_bank = 0;
+				bank_to_allocate = 0;
 				for(int i = 0 ; i< banks_number;i++){
-					if(data_in_bank [i] < least_data ){
-						least_data = data_in_bank [i];
-						desired_bank = i;
+					if(allocated_data_of_bank [i] < least_data_amount ){
+						least_data_amount = allocated_data_of_bank [i];
+						bank_to_allocate = i;
 					}
 				}
 
 			}else{ //Data placement policy 1 : place arrays on alternative banks
 
-				if(desired_bank == banks_number-1){
-					desired_bank = 0;
+				if(bank_to_allocate == banks_number-1){
+					bank_to_allocate = 0;
 				}else{
-					desired_bank = desired_bank + 1;
+					bank_to_allocate = bank_to_allocate + 1;
 				}
 			}
 
-			LLVM_DEBUG(dbgs()<<"assign"<< size << "to bank"<<desired_bank<<"\n");
+			LLVM_DEBUG(dbgs()<<"assign "<<it.second->getName()<<", size = "<< size << " to bank"<<bank_to_allocate<<"\n");
 			//banks_vars[desired_bank].insert(it->first);
 			//value_to_BankId[it->first] = desired_bank;
-			banks_vars[desired_bank].insert(it.second);
-			value_to_BankId[it.second] = desired_bank;
+			vars_in_bank[bank_to_allocate].insert(it.second);
+			value_to_BankId[it.second] = bank_to_allocate;
 			
-			data_in_bank[desired_bank] = size + data_in_bank[desired_bank];
+			allocated_data_of_bank[bank_to_allocate] = size + allocated_data_of_bank[bank_to_allocate];
 #ifdef ARCHI_16BIT
-			assert(data_in_bank[desired_bank]/2 < bank_size);
+			assert(allocated_data_of_bank[bank_to_allocate]/2 < bank_size);
 #else
 			assert(data_in_bank[desired_bank] < bank_size);
 #endif
@@ -2080,9 +2083,9 @@ void AllocateSPMBanks(std::unordered_set<Value *> &outer_vals,
 		}
 	}
 
-
-	for(int i = 0; i < banks_vars.size(); i++){
-		auto & bank_vars = banks_vars[i];
+	LLVM_DEBUG(dbgs() << "******** allocation results\n");
+	for(int i = 0; i < vars_in_bank.size(); i++){
+		auto & bank_vars = vars_in_bank[i];
 		LLVM_DEBUG(dbgs() << "Bank"<<i<< " vars :: \n");
 		for(Value* v : bank_vars){
 			LLVM_DEBUG(dbgs() << "\t" << v->getName() << " :: size = " << variable_sizes_bytes[v] << ", acceses = " << acc[v] << "\n");
@@ -2092,69 +2095,40 @@ void AllocateSPMBanks(std::unordered_set<Value *> &outer_vals,
 		}
 	}
 
-	int mem_size = banks_number * bank_size;
+	int total_mem_size = banks_number * bank_size;
 
 	LLVM_DEBUG(dbgs() << "FINAL ALLOCATION BEGIN.\n");
 	std::map<int, int> bank_base_address;
 	for(int i = 0; i< banks_number;i++){
 		bank_base_address.emplace(i, i * bank_size);
 	}
-	for (auto it = mem_ptrs.begin(); it != mem_ptrs.end(); it++)
+	for (auto [array_value, size]: variable_sizes_bytes)
 	{
-		Value* mem_ins = it->first;
-		GetElementPtrInst* gep = it->second;
+		LLVM_DEBUG(dbgs()<< "value name " << array_value->getName() << ",");
+		LLVM_DEBUG(dbgs() << "size = " << size << ",");
 
-		LLVM_DEBUG(dbgs() << "pointer_ins = " << mem_ins->getName() << ",");
-		LLVM_DEBUG(dbgs()<< "gep_pointer = " << gep->getPointerOperand()->getName() << ",");
-		LLVM_DEBUG(dbgs() << "size = " << variable_sizes_bytes[gep->getPointerOperand()] << ",");
+		assert(value_to_BankId.find(array_value) != value_to_BankId.end());
 
-		if(value_to_BankId.find(gep->getPointerOperand()) != value_to_BankId.end()){
-			if(spm_base_address.find(gep->getPointerOperand()) == spm_base_address.end()){
-				int bank_id = (value_to_BankId.find(gep->getPointerOperand()))->second;
-				spm_bank_allocation[gep->getPointerOperand()] = SPMBANKOfIndex(bank_id);
-				LLVM_DEBUG(dbgs() << "bank="<<bank_id<<",");
-				spm_base_address[gep->getPointerOperand()] = bank_base_address[bank_id];
-				assert(variable_sizes_bytes.find(gep->getPointerOperand()) != variable_sizes_bytes.end());
-#ifdef ARCHI_16BIT
-				bank_base_address[bank_id] += variable_sizes_bytes[gep->getPointerOperand()]/2;				
-#else
-				bank_base_address[bank_id] += variable_sizes_bytes[gep->getPointerOperand()];
-#endif
-				LLVM_DEBUG(dbgs() << "addr=" << spm_base_address[gep->getPointerOperand()] << "\n");
-			}
-			else{
-				LLVM_DEBUG(dbgs() << "array/struct already allocated \n");
-			}
-		}
-		else{
-			assert(false);
-		}
-	}
-
-	for (auto it = outer_vals.begin(); it != outer_vals.end(); it++)
-	{
-		Value* outer_value_mem = *it;
-
-		LLVM_DEBUG(dbgs() << "outer value = " << outer_value_mem->getName() << ",");
-		if(value_to_BankId.find(outer_value_mem) != value_to_BankId.end()){
-			int bank_id = (value_to_BankId.find(outer_value_mem))->second;
-			spm_bank_allocation[outer_value_mem] = SPMBANKOfIndex(bank_id);
-			spm_base_address[outer_value_mem] = bank_base_address[bank_id];
-			assert(variable_sizes_bytes.find(outer_value_mem) != variable_sizes_bytes.end());
-#ifdef ARCHI_16BIT
-			bank_base_address[bank_id] += variable_sizes_bytes[outer_value_mem]/2;
-#else
-			bank_base_address[bank_id] += variable_sizes_bytes[outer_value_mem];
-
-#endif
+		if(spm_base_address.find(array_value) == spm_base_address.end()){
+			int bank_id = (value_to_BankId.find(array_value))->second;
+			spm_bank_allocation[array_value] = SPMBANKOfIndex(bank_id);
 			LLVM_DEBUG(dbgs() << "bank="<<bank_id<<",");
-			LLVM_DEBUG(dbgs() << "addr=" << spm_base_address[outer_value_mem] << "\n");
+			spm_base_address[array_value] = bank_base_address[bank_id];
+			assert(variable_sizes_bytes.find(array_value) != variable_sizes_bytes.end());
+#ifdef ARCHI_16BIT
+			bank_base_address[bank_id] += variable_sizes_bytes[array_value]/2;				
+#else
+			bank_base_address[bank_id] += variable_sizes_bytes[array_value];
+#endif
+			LLVM_DEBUG(dbgs() << "addr=" << spm_base_address[array_value] << "\n");
 		}
 		else{
-			assert(false);
+			LLVM_DEBUG(dbgs() << "array/struct already allocated \n");
 		}
-
+		
 	}
+
+	
 
 	LLVM_DEBUG(dbgs() << "FINAL ALLOCATION END.\n");
 
