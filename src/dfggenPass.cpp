@@ -2077,7 +2077,7 @@ void AllocateSPMBanks(std::unordered_set<Value *> &outer_vals,
 #ifdef ARCHI_16BIT
 			assert(allocated_data_of_bank[bank_to_allocate]/2 < bank_size);
 #else
-			assert(data_in_bank[desired_bank] < bank_size);
+			assert(allocated_data_of_bank[bank_to_allocate] < bank_size);
 #endif
 
 		}
