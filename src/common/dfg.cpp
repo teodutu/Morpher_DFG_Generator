@@ -11192,7 +11192,6 @@ void DFG::InstrumentInOutVars(Function &F, std::unordered_map<Value *, int> mem_
 				Value *size_val = ConstantInt::get(Type::getInt32Ty(Ctx), size);
 	#endif
 		
-		Value *size_val2 = ConstantInt::get(Type::getInt32Ty(Ctx), size/4);
 		bool isOLNodewithPtrTyUsage = false;
 		for(auto trans : loopentryBB){
 			BasicBlock* entryBB = trans.first;
@@ -11232,8 +11231,12 @@ void DFG::InstrumentInOutVars(Function &F, std::unordered_map<Value *, int> mem_
 
 			if(isOLNodewithPtrTyUsage == true){isOLNodewithPtrTyUsage = false;}
 			else if(ptr->getType()->isPointerTy()){
-				LLVM_DEBUG(dbgs() << "Adding LiveInReport() call\n");
+				LLVM_DEBUG(dbgs() << "Adding LiveInReport() call, size:"<<"\n");
+				LLVM_DEBUG(size_val->dump());
+				LLVM_DEBUG(size_val->dump());
+				
 				Value* bitcastedptr = builder.CreateBitCast(it->first, Type::getInt8PtrTy(Ctx));
+
 				builder.CreateCall(live_in_report_FN,{ptr_name_val,bitcastedptr,size_val});
 			//	Value* bitcastedptr2 = builder.CreateBitCast(it->first, Type::getInt32PtrTy(Ctx));
 			//	builder.CreateCall(live_in_report_FN2,{ptr_name_val,bitcastedptr2,size_val2});

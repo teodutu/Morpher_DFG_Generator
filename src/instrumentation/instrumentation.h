@@ -64,6 +64,7 @@ void LiveInReportIntermediateVar(const char* varname, uint32_t value);
 void LiveOutReportIntermediateVar(const char* varname, uint32_t value);
 void LiveInReportPtrTypeUsage(const char* varname,const char* varbaseaddr, uint32_t value, uint32_t size);
 void please_map_me();
+uint8_t* trunkTo16Bit(uint8_t* value, uint32_t size);
 
 
 #ifdef __cplusplus

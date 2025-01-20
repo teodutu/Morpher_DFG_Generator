@@ -648,10 +648,33 @@ void reportLoopEnd(const char* loopName){
 }
 
 
+ uint8_t* trunkTo16Bit(uint8_t*  value, uint32_t size){
+	uint32_t newSize = (size + 3) / 4 * 2;  // Rounds up to include partial groups
+    
+    // Allocate new array
+    uint8_t* newArray = new uint8_t[newSize];
+    
+    // Keep track of write position in new array
+    uint32_t writePos = 0;
+    
+    // Process the array in groups of 4
+    for (uint32_t readPos = 0; readPos + 3 < size; readPos += 4) {
+        // Copy first two elements of each group to new array
+        newArray[writePos] = value[readPos];
+        newArray[writePos + 1] = value[readPos + 1];
+        writePos += 2;
+    }
+    
+    return newArray;
+}
+
 void LiveInReport(const char* varname, uint8_t* value, uint32_t size){
 	std::string varname_str(varname);
 
-	//cout << "Call LiveInReport var name:" << varname_str << " size:" << (int)size <<"\n";
+	// cout << "Call LiveInReport var name:" << varname_str << " size:" << (int)size <<"\n";
+	#ifdef ARCHI_16BIT
+		value = trunkTo16Bit(value,size * 2);
+	#endif
 
 	for(int i=0; i<size; i++){
 		data_morpher[varname_str].pre_data.push_back(value[i]);
@@ -689,7 +712,9 @@ void LiveInReportPtrTypeUsage(const char* varname,const char* varbaseaddr, uint3
 	uint8_t* value_ptr = (uint8_t*)&addr;
 	
 
-
+	#ifdef ARCHI_16BIT
+		value_ptr = trunkTo16Bit(value_ptr,size * 2);
+	#endif
 
 	for(int i=0; i<bytes_per_variable; i++){
 		data_morpher[varname_str].pre_data.push_back(value_ptr[i]);
@@ -711,6 +736,9 @@ void LiveInReport2(const char* varname, uint32_t* value, uint32_t size){
 
 void LiveOutReport(const char* varname, uint8_t* value, uint32_t size){
 	std::string varname_str(varname);
+	#ifdef ARCHI_16BIT
+		value = trunkTo16Bit(value,size * 2);
+	#endif
 	//cout << "Call LiveOutReport var name:" << varname_str << " size:" << (int)size <<"\n";
 	for(int i=0; i<size; i++){
 		data_morpher[varname_str].post_data[i] = value[i];
@@ -722,6 +750,9 @@ void LiveOutReport(const char* varname, uint8_t* value, uint32_t size){
 void LiveInReportIntermediateVar(const char* varname, uint32_t value){
 	std::string varname_str(varname);
 	uint8_t* value_ptr = (uint8_t*)&value;
+	#ifdef ARCHI_16BIT
+		value_ptr = trunkTo16Bit(value_ptr,bytes_per_variable * 2);
+	#endif
 	for(int i=0; i<bytes_per_variable; i++){
 		data_morpher[varname_str].pre_data.push_back(value_ptr[i]);
 		data_morpher[varname_str].post_data.push_back(value_ptr[i]);
@@ -733,6 +764,10 @@ void LiveOutReportIntermediateVar(const char* varname, uint32_t value){
 	std::string varname_str(varname);
 	//cout << "Call LiveOutReportIntermediateVar var name:" << varname_str << "Value:" <<value << "\n";
 	uint8_t* value_ptr = (uint8_t*)&value;
+
+	#ifdef ARCHI_16BIT
+		value_ptr = trunkTo16Bit(value_ptr,bytes_per_variable * 2);
+	#endif
 	for(int i=0; i<bytes_per_variable; i++){
 		data_morpher[varname_str].pre_data.push_back(0);
 		data_morpher[varname_str].post_data.push_back(value_ptr[i]);
