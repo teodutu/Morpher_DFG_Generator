@@ -15,3 +15,5 @@ llvm-link eeg_opt_instrument.ll instrumentation.ll -o final.ll
 llc -filetype=obj final.ll -o final.o
 clang++ -m32 final.o -o final
 ./final 1> final_log.txt 2> final_err_log.txt
+
+rm time*.log
