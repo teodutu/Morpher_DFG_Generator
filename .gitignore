@@ -3,3 +3,8 @@
 *.png
 *.o
 *.pdf
+
+build/
+.vscode/
+output/
+memtraces/
