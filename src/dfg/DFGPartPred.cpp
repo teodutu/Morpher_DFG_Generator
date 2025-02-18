@@ -1548,18 +1548,18 @@ void DFGPartPred::balanceSched() {
 
 struct TDRANode {
 	int idx;
-    bool i1_used;
-    bool i1_const_used;
-    long i1_src_or_const;
-    bool i2_used;
-    bool i2_const_used;
-    long i2_src_or_const;
-    bool p_used;
-    long p_src;
-    bool init_out_used;
-    long init_out;
-    std::string opcode;
-    std::string dst_oh;
+	bool i1_used;
+	bool i1_const_used;
+	long i1_src_or_const;
+	bool i2_used;
+	bool i2_const_used;
+	long i2_src_or_const;
+	bool p_used;
+	long p_src;
+	bool init_out_used;
+	long init_out;
+	std::string opcode;
+	std::string dst_oh;
 };
 
 void DFGPartPred::printNewDFGTxt() {
@@ -1572,7 +1572,7 @@ void DFGPartPred::printNewDFGTxt() {
 	TDRANode tdraNode;
 
 	std::unordered_map<int, int> idxMap;
-	std::unordered_map<int, int> pred_srcs;
+	std::unordered_map<int, int> predSrcs;
 
 	for (dfgNode* node : NodeList) {
 		std::string opcode = HyCUBEInsStrings[node->getFinalIns()];
@@ -1594,94 +1594,153 @@ void DFGPartPred::printNewDFGTxt() {
 		tdraNode.init_out_used = false;
 		tdraNode.init_out = 0;
 
-		if (node->hasConstantVal()){
+		if (node->hasConstantVal()) {
+			tdraNode.i2_used = true;
 			tdraNode.i2_const_used = true;
 			tdraNode.i2_src_or_const = node->getConstantVal();
 		}
 
 		// TODO: OutLoopLoads
 
-		std::cout << "Idx: " << tdraNode.idx << "; opcode: " << tdraNode.opcode << "\n";
-
 		int input_idx = 1;
 		for (dfgNode* parent : node->getAncestors()){
-			if (input_idx == 1) {
-				tdraNode.i1_used = true;					
-
-				if (tdraNode.opcode == "STOREB") {
-					opcode = HyCUBEInsStrings[parent->getFinalIns()];
-					std::cout << "STROREB node; idx = " << tdraNode.idx << "; parent = "
-						<< parent->getIdx() << "; opcode = " << opcode << "\n";
-					if (opcode == "MOVC") {
-						std::cout<< "\t STORE const 1 = " << tdraNode.i1_src_or_const
-							<< "; parent const = " << parent->getConstantVal() << "\n";
-						tdraNode.i1_src_or_const += parent->getConstantVal();
-						tdraNode.i1_const_used = true;
-						std::cout << "updated const 1 value to: " << tdraNode.i1_src_or_const << "\n";
-					}
-				} else {
-					std::string errorMsg = "Instruction with IDX " + std::to_string(tdraNode.idx) +
-						" uses const as i2 and node " + std::to_string(parent->getIdx()) + " as i3";
-					assert(!tdraNode.i1_const_used && errorMsg.c_str());
-					tdraNode.i1_src_or_const = parent->getIdx();
-				} 
-			} else if (input_idx == 2) {
-				tdraNode.i2_used = true;
-
-				if (tdraNode.opcode == "STOREB") {
-					opcode = HyCUBEInsStrings[parent->getFinalIns()];
-					std::cout << "STROREB node; idx = " << tdraNode.idx << "; parent = "
-						<< parent->getIdx() << "; opcode = " << opcode << "\n";
-					if (opcode == "MOVC") {
-						std::cout<< "\t STORE const 2 = " << tdraNode.i2_src_or_const
-							<< "; parent const = " << parent->getConstantVal() << "\n";
-						tdraNode.i2_src_or_const += parent->getConstantVal();
-						tdraNode.i2_const_used = true;
-						std::cout << "updated const 2 value to: " << tdraNode.i2_src_or_const << "\n";
-					}
-				} else {
-					std::string errorMsg = "Instruction with IDX " + std::to_string(tdraNode.idx) +
-						" uses const as i2 and node " + std::to_string(parent->getIdx()) + " as i3";
-					assert(!tdraNode.i2_const_used && errorMsg.c_str());
-					tdraNode.i2_src_or_const = parent->getIdx();
-				}
+			if (input_idx > 2) {
+				std::cerr << "ERROR: Instruction with IDX " << std::to_string(tdraNode.idx)
+					<< " has more than 2 inputs\n";
+				assert(false);
 			} else {
-				std::string errorMsg = "Instruction with IDX " + std::to_string(tdraNode.idx) +
-					" has more than 2 inputs";
-				assert(false && errorMsg.c_str());
+				if (tdraNode.opcode == "STOREB") {
+					opcode = HyCUBEInsStrings[parent->getFinalIns()];
+					if (opcode == "MOVC") {
+						if (input_idx == 1) {
+							tdraNode.i1_src_or_const += parent->getConstantVal();
+							tdraNode.i1_const_used = true;
+						} else {
+							tdraNode.i2_src_or_const += parent->getConstantVal();
+							tdraNode.i2_const_used = true;
+						}
+					} else {
+						goto LnotStore;
+					}
+				} else {
+				LnotStore:
+					if (input_idx == 1) {
+						tdraNode.i1_src_or_const = parent->getIdx();
+						tdraNode.i1_used = true;
+					} else if (tdraNode.i2_const_used) {
+						std::cerr << "ERROR: Instruction with IDX " << std::to_string(tdraNode.idx) << " and opcode "
+							<< tdraNode.opcode << " has I2 both const: " << tdraNode.i2_src_or_const << " and index: "
+							<< parent->getIdx() << "\n";
+						// assert(false);
+					} else {
+						tdraNode.i2_src_or_const = parent->getIdx();
+						tdraNode.i2_used = true;
+					}
+				}
 			}
 
 			input_idx++;
 		}
 
+		// Handle predication
+		for(dfgNode* child : node->getChildren()){
+			bool written = false;
+			if (findEdge(node,child)->getType() == EDGE_TYPE_PS) {
+				written=true;
+			} else if (node->getNameType() == "CMERGE") {
+				if (child->getNode()) {
+					if (!dyn_cast<PHINode>(child->getNode()) && !dyn_cast<SelectInst>(child->getNode())) {
+						// if not phi
+						written = true;
+						int operand_no = findOperandNumber(child, child->getNode(), cmergePHINodes[node]->getNode());
+						if (operand_no == 0) {
+							child->parentClassification[0] = node;
+							predSrcs[child->getIdx()] = node->getIdx();
+						}
+					}
+				}
+			} else if (node->getNameType() == "SELECTPHI" && (child != selectPHIAncestorMap[node])) {
+				if (child->getNode()) {
+					written = true;
+					int operand_no = findOperandNumber(child, child->getNode(), selectPHIAncestorMap[node]->getNode());
+					if (operand_no == 0) {
+						child->parentClassification[0] = node;
+						predSrcs[child->getIdx()] = node->getIdx();
+					}
+				}
+			}
+			if (Edge2OperandIdxMap.find(node) != Edge2OperandIdxMap.end()
+					&& Edge2OperandIdxMap[node].find(child) != Edge2OperandIdxMap[node].end()) {
+				int operand_no = Edge2OperandIdxMap[node][child];
+				if (operand_no == 0){
+					child->parentClassification[0] = node;
+					predSrcs[child->getIdx()] = node->getIdx();
+				}
+				written = true;
+			}
+
+			if (!written && child->parentClassification[0] == node) {
+				predSrcs[child->getIdx()] = node->getIdx();
+			}
+		}
+
 		tdraNodes.push_back(tdraNode);
 	}
 
-	// tdraNodes.erase(
-	// 	std::remove_if(tdraNodes.begin(), tdraNodes.end(), [](const TDRANode& a) {
-	// 		return a.opcode == "MOVC";
-	// 	}),
-	// 	tdraNodes.end()
-	// );
-
 	int idx = 0;
 	for (TDRANode& node : tdraNodes) {
-		idxMap[node.idx] = idx++;
+		if (!node.i1_const_used) {
+			auto i1_node = std::find_if(tdraNodes.begin(), tdraNodes.end(), 
+				[&node](const TDRANode& a) {
+					return a.idx == node.i1_src_or_const && a.opcode == "CMERGE";
+				});
+			if (i1_node != tdraNodes.end()) {
+				node.i1_src_or_const = i1_node->i2_src_or_const;
+				node.i1_const_used = i1_node->i2_const_used;
+				if (i1_node->p_used) {
+					node.p_src = i1_node->p_src;
+					node.p_used = true;
+				}
+			}
+		}
+		if (!node.i2_const_used) {
+			auto i2_node = std::find_if(tdraNodes.begin(), tdraNodes.end(), 
+				[&node](const TDRANode& a) {
+					return a.idx == node.i2_src_or_const && a.opcode == "CMERGE";
+				});
+			if (i2_node != tdraNodes.end()) {
+				node.i2_src_or_const = i2_node->i2_src_or_const;
+				node.i2_const_used = i2_node->i2_const_used;
+				if (i2_node->p_used) {
+					node.p_src = i2_node->p_src;
+					node.p_used = true;
+				}
+			}
+		}
 
-		if 
+		if (node.opcode != "CMERGE") {
+			idxMap[node.idx] = idx++;
+		}
+
+		auto p = predSrcs.find(node.idx);
+		if (p != predSrcs.end()) {
+			node.p_src = p->second;
+			node.p_used = true;
+		}
 	}
 
-	for (TDRANode& node : tdraNodes) {
-		// auto pred = pred_srcs.find(node.idx);
-		// if (pred != pred_srcs.end()) {
-		// 	node.p_used = true;
-		// 	node.p_src = idxMap[pred->second];
-		// }
+	tdraNodes.erase(
+		std::remove_if(tdraNodes.begin(), tdraNodes.end(), [](const TDRANode& a) {
+			return a.opcode == "CMERGE";
+		}),
+		tdraNodes.end()
+	);
 
+	for (TDRANode& node : tdraNodes) {
 		if (node.opcode.find("LOAD") != std::string::npos) {
-			tdraNode.opcode = "LOAD";
+			node.opcode = "LOAD";
 		} else if (node.opcode.find("STORE") != std::string::npos) {
-			tdraNode.opcode = "STORE";
+			node.opcode = "STORE";
 		}
 
 		if (!node.i1_const_used) {
@@ -1692,6 +1751,9 @@ void DFGPartPred::printNewDFGTxt() {
 		}
 
 		node.idx = idxMap[node.idx];
+		if (node.p_used) {
+			node.p_src = idxMap[node.p_src];
+		}
 	}
 
 	std::sort(tdraNodes.begin(),tdraNodes.end(), [](const TDRANode& a, const TDRANode& b) {
@@ -1706,7 +1768,7 @@ void DFGPartPred::printNewDFGTxt() {
 			<< ", I2_SRC_OR_CONST:" << node.i2_src_or_const;
 		tdraFile << ", P_USED:" << node.p_used << ", P_SRC:" << node.p_src;
 		tdraFile << ", INIT_OUT_USED:" << node.init_out_used << ", INIT_OUT:" << node.init_out;
-		tdraFile << "\n\n";
+		tdraFile << "\n";
 	}
 
 	tdraFile.close();
@@ -1725,7 +1787,7 @@ void DFGPartPred::printNewDFGXML() {
 	TDRANode tdraNode;
 
 	std::unordered_map<int, int> idxMap;
-	std::unordered_map<int, int> pred_srcs;
+	std::unordered_map<int, int> predSrcs;
 
 	//    insertMOVC();
 	//	scheduleASAP();
@@ -1746,7 +1808,6 @@ void DFGPartPred::printNewDFGXML() {
 	for(dfgNode* node : NodeList){
 		nodeBBModified[node]=node->BB->getName().str();
 	}
-
 
 	for(dfgNode* node : NodeList){
 		int cmergeParentCount=0;
@@ -2003,11 +2064,11 @@ void DFGPartPred::printNewDFGXML() {
 					child->parentClassification[0]=node;
 					if(child->getNPB()){
 						xmlFile << "NPB=\"1\" ";
-						pred_srcs[child->getIdx()] = node->getIdx();
+						predSrcs[child->getIdx()] = node->getIdx();
 					}
 					else{
 						xmlFile << "NPB=\"0\" ";
-						pred_srcs[child->getIdx()] = node->getIdx();
+						predSrcs[child->getIdx()] = node->getIdx();
 						// TODO: how to specify whether pred or not pred
 					}
 					xmlFile << "type=\"P\"/>\n";
@@ -4103,13 +4164,13 @@ void DFGPartPred::addParentsToNonAGINodes(dfgNode* node, std::set<dfgNode*> &non
 void DFGPartPred::addParentsToRemovalNodes(dfgNode* node, std::set<dfgNode*> &removalNodes, std::set<dfgNode*> &non_agi_NodesSet){
 	/*if(node->getNameType() == "OutLoopLOAD" || node->getNameType() == "CMERGE"|| node->getNameType() == "LOOPSTART"  ){
 
-        }
-        else if(PHINode* PHI = dyn_cast<PHINode>(node->getNode())){
+		}
+		else if(PHINode* PHI = dyn_cast<PHINode>(node->getNode())){
 
 			LLVM_DEBUG(dbgs() << "DFGAGIRemove: PHI node found in parent instructions. Adding all nodes between PHI and GEP/BRI to removalNodes------ \n";
-            removalNodes.insert(tempNodesSet.begin(),tempNodesSet.end());
-            LLVM_DEBUG(dbgs() << "DFGAGIRemove: Done adding\n";
-            tempNodesSet.clear();
+			removalNodes.insert(tempNodesSet.begin(),tempNodesSet.end());
+			LLVM_DEBUG(dbgs() << "DFGAGIRemove: Done adding\n";
+			tempNodesSet.clear();
 		}*/
 
 
