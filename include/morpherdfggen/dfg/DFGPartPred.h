@@ -46,6 +46,7 @@ public :
 	int maxASAPLevel=0;
 
 	virtual void printNewDFGXML();
+	void printNewDFGTxt();
 	int classifyParents();
 
 	void removeOutLoopLoad();
@@ -70,6 +71,7 @@ public :
 		printDOT(this->kernelname + "_PartPredDFG.dot");
 		printDOTsimple(this->kernelname + "_PartPredDFG_simple.dot");
 		printNewDFGXML();
+		printNewDFGTxt();
 		//std::cout << "DFG generated ("<< this->kernelname <<"_PartPredDFG.dot/xml) \n";
 	}
 #ifdef REMOVE_AGI

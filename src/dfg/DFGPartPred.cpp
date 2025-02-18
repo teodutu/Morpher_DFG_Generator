@@ -1546,8 +1546,173 @@ void DFGPartPred::balanceSched() {
 
 }
 
-void DFGPartPred::printNewDFGXML() {
+struct TDRANode {
+	int idx;
+    bool i1_used;
+    bool i1_const_used;
+    long i1_src_or_const;
+    bool i2_used;
+    bool i2_const_used;
+    long i2_src_or_const;
+    bool p_used;
+    long p_src;
+    bool init_out_used;
+    long init_out;
+    std::string opcode;
+    std::string dst_oh;
+};
 
+void DFGPartPred::printNewDFGTxt() {
+	std::string tdraFileName = kernelname + "_PartPredDFG.txt";
+
+	std::ofstream tdraFile;
+	tdraFile.open(tdraFileName.c_str());
+
+	std::vector<TDRANode> tdraNodes;
+	TDRANode tdraNode;
+
+	std::unordered_map<int, int> idxMap;
+	std::unordered_map<int, int> pred_srcs;
+
+	for (dfgNode* node : NodeList) {
+		std::string opcode = HyCUBEInsStrings[node->getFinalIns()];
+		if (opcode == "MOVC") {
+			continue;
+		}
+
+		tdraNode.opcode = opcode;		
+
+		tdraNode.idx = node->getIdx();
+		tdraNode.i1_const_used = false;
+		tdraNode.i2_const_used = false;
+		tdraNode.i1_src_or_const = 0;
+		tdraNode.i2_src_or_const = 0;
+		tdraNode.i1_used = false;
+		tdraNode.i2_used = false;
+		tdraNode.p_used = false;
+		tdraNode.p_src = 0;
+		tdraNode.init_out_used = false;
+		tdraNode.init_out = 0;
+
+		if (node->hasConstantVal()){
+			tdraNode.i2_const_used = true;
+			tdraNode.i2_src_or_const = node->getConstantVal();
+		}
+
+		// TODO: OutLoopLoads
+
+		std::cout << "Idx: " << tdraNode.idx << "; opcode: " << tdraNode.opcode << "\n";
+
+		int input_idx = 1;
+		for (dfgNode* parent : node->getAncestors()){
+			if (input_idx == 1) {
+				tdraNode.i1_used = true;					
+
+				if (tdraNode.opcode == "STOREB") {
+					opcode = HyCUBEInsStrings[parent->getFinalIns()];
+					std::cout << "STROREB node; idx = " << tdraNode.idx << "; parent = "
+						<< parent->getIdx() << "; opcode = " << opcode << "\n";
+					if (opcode == "MOVC") {
+						std::cout<< "\t STORE const 1 = " << tdraNode.i1_src_or_const
+							<< "; parent const = " << parent->getConstantVal() << "\n";
+						tdraNode.i1_src_or_const += parent->getConstantVal();
+						tdraNode.i1_const_used = true;
+						std::cout << "updated const 1 value to: " << tdraNode.i1_src_or_const << "\n";
+					}
+				} else {
+					std::string errorMsg = "Instruction with IDX " + std::to_string(tdraNode.idx) +
+						" uses const as i2 and node " + std::to_string(parent->getIdx()) + " as i3";
+					assert(!tdraNode.i1_const_used && errorMsg.c_str());
+					tdraNode.i1_src_or_const = parent->getIdx();
+				} 
+			} else if (input_idx == 2) {
+				tdraNode.i2_used = true;
+
+				if (tdraNode.opcode == "STOREB") {
+					opcode = HyCUBEInsStrings[parent->getFinalIns()];
+					std::cout << "STROREB node; idx = " << tdraNode.idx << "; parent = "
+						<< parent->getIdx() << "; opcode = " << opcode << "\n";
+					if (opcode == "MOVC") {
+						std::cout<< "\t STORE const 2 = " << tdraNode.i2_src_or_const
+							<< "; parent const = " << parent->getConstantVal() << "\n";
+						tdraNode.i2_src_or_const += parent->getConstantVal();
+						tdraNode.i2_const_used = true;
+						std::cout << "updated const 2 value to: " << tdraNode.i2_src_or_const << "\n";
+					}
+				} else {
+					std::string errorMsg = "Instruction with IDX " + std::to_string(tdraNode.idx) +
+						" uses const as i2 and node " + std::to_string(parent->getIdx()) + " as i3";
+					assert(!tdraNode.i2_const_used && errorMsg.c_str());
+					tdraNode.i2_src_or_const = parent->getIdx();
+				}
+			} else {
+				std::string errorMsg = "Instruction with IDX " + std::to_string(tdraNode.idx) +
+					" has more than 2 inputs";
+				assert(false && errorMsg.c_str());
+			}
+
+			input_idx++;
+		}
+
+		tdraNodes.push_back(tdraNode);
+	}
+
+	// tdraNodes.erase(
+	// 	std::remove_if(tdraNodes.begin(), tdraNodes.end(), [](const TDRANode& a) {
+	// 		return a.opcode == "MOVC";
+	// 	}),
+	// 	tdraNodes.end()
+	// );
+
+	int idx = 0;
+	for (TDRANode& node : tdraNodes) {
+		idxMap[node.idx] = idx++;
+
+		if 
+	}
+
+	for (TDRANode& node : tdraNodes) {
+		// auto pred = pred_srcs.find(node.idx);
+		// if (pred != pred_srcs.end()) {
+		// 	node.p_used = true;
+		// 	node.p_src = idxMap[pred->second];
+		// }
+
+		if (node.opcode.find("LOAD") != std::string::npos) {
+			tdraNode.opcode = "LOAD";
+		} else if (node.opcode.find("STORE") != std::string::npos) {
+			tdraNode.opcode = "STORE";
+		}
+
+		if (!node.i1_const_used) {
+			node.i1_src_or_const = idxMap[node.i1_src_or_const];
+		}
+		if (!node.i2_const_used) {
+			node.i2_src_or_const = idxMap[node.i2_src_or_const];
+		}
+
+		node.idx = idxMap[node.idx];
+	}
+
+	std::sort(tdraNodes.begin(),tdraNodes.end(), [](const TDRANode& a, const TDRANode& b) {
+		return a.idx < b.idx;
+	});
+
+	for (TDRANode& node : tdraNodes) {
+		tdraFile << "IDX:" << node.idx << ", OPCODE:" << node.opcode;;
+		tdraFile << ", I1_USED:" << node.i1_used << ", I1_CONST_USED:" << node.i1_const_used
+			<< ", I1_SRC_OR_CONST:" << node.i1_src_or_const;
+		tdraFile << ", I2_USED:" << node.i2_used << ", I2_CONST_USED:" << node.i2_const_used
+			<< ", I2_SRC_OR_CONST:" << node.i2_src_or_const;
+		tdraFile << ", P_USED:" << node.p_used << ", P_SRC:" << node.p_src;
+		tdraFile << ", INIT_OUT_USED:" << node.init_out_used << ", INIT_OUT:" << node.init_out;
+		tdraFile << "\n\n";
+	}
+
+	tdraFile.close();
+}
+
+void DFGPartPred::printNewDFGXML() {
 
 	std::string fileName = kernelname + "_PartPredDFG.xml";
 #ifdef REMOVE_AGI
@@ -1556,7 +1721,11 @@ void DFGPartPred::printNewDFGXML() {
 	std::ofstream xmlFile;
 	xmlFile.open(fileName.c_str());
 
+	std::vector<TDRANode> tdraNodes;
+	TDRANode tdraNode;
 
+	std::unordered_map<int, int> idxMap;
+	std::unordered_map<int, int> pred_srcs;
 
 	//    insertMOVC();
 	//	scheduleASAP();
@@ -1620,7 +1789,22 @@ void DFGPartPred::printNewDFGXML() {
 	xmlFile << "<DFG count=\"" << NodeList.size() << "\">\n";
 	std::cout << "DFG node count: " << NodeList.size() << "\n";
 
+	int idx = 0;
+
 	for(dfgNode* node : NodeList){
+		tdraNode.idx = node->getIdx();
+		tdraNode.opcode = "";
+		tdraNode.i1_const_used = false;
+		tdraNode.i2_const_used = false;
+		tdraNode.i1_used = false;
+		tdraNode.i2_used = false;
+		tdraNode.p_used = false;
+		tdraNode.p_src = 0;
+		tdraNode.init_out_used = false;
+		tdraNode.init_out = 0;
+
+		idxMap[tdraNode.idx] = idx++;
+
 		//	for (int i = 0; i < maxASAPLevel; ++i) {
 		//		for(dfgNode* node : asaplevelNodeList[i]){
 		xmlFile << "<Node idx=\"" << node->getIdx() << "\"";
@@ -1645,13 +1829,27 @@ void DFGPartPred::printNewDFGXML() {
 		xmlFile << "BB=\"" << nodeBBModified[node] << "\"";
 		if(node->hasConstantVal()){
 			xmlFile << "CONST=\"" << node->getConstantVal() << "\"";
+			tdraNode.i2_const_used = true;
+			tdraNode.i2_src_or_const = node->getConstantVal();
 		}
+
 		xmlFile << ">\n";
 
 		xmlFile << "<OP>";
 		if((node->getNameType() == "OutLoopLOAD") || (node->getNameType() == "OutLoopSTORE") ){
 			xmlFile << "O";
+			tdraNode.opcode = "O";
 		}
+
+		std::string opcode = HyCUBEInsStrings[node->getFinalIns()];
+		// if (opcode.find("STORE") != std::string::npos) {
+		// 	tdraNode.opcode += "STORE";
+		if (opcode.find("LOAD") != std::string::npos) {
+			tdraNode.opcode += "LOAD";
+		} else {
+			tdraNode.opcode += opcode;
+		}
+
 		xmlFile << HyCUBEInsStrings[node->getFinalIns()] << "</OP>\n";
 
 		if(node->getArrBasePtr() != "NOT_A_MEM_OP"){
@@ -1678,10 +1876,32 @@ void DFGPartPred::printNewDFGXML() {
 
 		//			xmlFile << "<OP>" << HyCUBEInsStrings[node->getFinalIns()] << "</OP>\n";
 
+		int input_idx = 1;
 		xmlFile << "<Inputs>\n";
 		for(dfgNode* parent : node->getAncestors()){
 			//			xmlFile << "\t<Input idx=\"" << parent->getIdx() << "\" type=\"DATA\"/>\n";
 			xmlFile << "\t<Input idx=\"" << parent->getIdx() << "\"/>\n";
+			if (input_idx == 1) {
+				tdraNode.i1_used = true;
+				tdraNode.i1_src_or_const = parent->getIdx();
+			} else if (input_idx == 2) {
+				if (tdraNode.opcode == "STOREB") {
+					opcode = HyCUBEInsStrings[parent->getFinalIns()];
+					if (opcode == "MOVC") {
+						tdraNode.i2_src_or_const += parent->getConstantVal();
+					}
+				} else {
+					std::string errorMsg = "Instruction with IDX " + std::to_string(tdraNode.idx) +
+						" uses const as i2 and node " + std::to_string(parent->getIdx()) + " as i3";
+					assert(!tdraNode.i2_const_used && errorMsg.c_str());
+					tdraNode.i2_used = true;
+					tdraNode.i2_src_or_const = parent->getIdx();
+				}
+			} else {
+				std::string errorMsg = "Instruction with IDX " + std::to_string(tdraNode.idx) +
+					" has more than 2 inputs";
+				assert(false && errorMsg.c_str());
+			}
 		}
 		//		for(dfgNode* parentPHI : node->getPHIancestors()){
 		//			xmlFile << "\t<Input idx=\"" << parentPHI->getIdx() << "\" type=\"PHI\"/>\n";
@@ -1783,9 +2003,12 @@ void DFGPartPred::printNewDFGXML() {
 					child->parentClassification[0]=node;
 					if(child->getNPB()){
 						xmlFile << "NPB=\"1\" ";
+						pred_srcs[child->getIdx()] = node->getIdx();
 					}
 					else{
 						xmlFile << "NPB=\"0\" ";
+						pred_srcs[child->getIdx()] = node->getIdx();
+						// TODO: how to specify whether pred or not pred
 					}
 					xmlFile << "type=\"P\"/>\n";
 				}
@@ -1849,25 +2072,13 @@ void DFGPartPred::printNewDFGXML() {
 		xmlFile << "</RecParents>\n";
 
 		xmlFile << "</Node>\n\n";
-
 	}
 	//		}
 	//	}
 
-
-
-
 	xmlFile << "</DFG>\n";
 
-
-
-
-
 	xmlFile.close();
-
-
-
-
 }
 
 int DFGPartPred::classifyParents() {
