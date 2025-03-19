@@ -6556,7 +6556,7 @@ int DFG::nameNodes()
 #ifdef ARCHI_16BIT
 				node->setConstantVal(MEM_SIZE  - 2);
 #else
-				node->setConstantVal(MEM_SIZE/2  - 1);
+				node->setConstantVal(MEM_SIZE  - 1);
 #endif	
 			}
 			else if (node->getNameType().compare("MOVC") == 0)
