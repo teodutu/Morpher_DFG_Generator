@@ -16,7 +16,7 @@ opt -gvn -mem2reg -memdep -memcpyopt -lcssa -loop-simplify -licm \
 #opt -load ~/manycore/cgra_dfg/buildeclipse/skeleton/libSkeletonPass.so -fn $BASENAME -ln $2 -ii $3 -skeleton integer_fft_gvn.ll -S -o integer_fft_gvn_instrument.ll
 
 opt -load ./build/src/libdfggenPass.so -fn "$2" -skeleton "${FULLNAME}_gvn.ll" \
-    -S -o "${FULLNAME}_gvn_instrument.ll" -nobanks "${3:-2}"  -banksize "${4:-2048}"
+    -S -o "${FULLNAME}_gvn_instrument.ll" -nobanks "${3:-1}"  -banksize "${4:-256}"
 
 clang -target i386-unknown-linux-gnu -c -emit-llvm -S ./src/instrumentation/instrumentation.cpp -o instrumentation.ll
 
