@@ -1578,6 +1578,22 @@ static void splitDFG(std::vector<DODANode>& dodaNodes) {
     int partitionSize = numNodes / 2;
 	int idx = dodaNodes.size();
 	int tmpIdx = MEM_SIZE - 3;
+	std::vector<int> storeNodeIndices;
+	DODANode jumpNode, addNode;
+
+	jumpNode.idx = idx++;
+	jumpNode.opcode = "JUMP";
+	jumpNode.i1_used = true;
+	jumpNode.i1_const_used = false;
+	jumpNode.i1_src_or_const = 0;  // Will be replaced later
+	jumpNode.i2_used = true;
+	jumpNode.i2_const_used = true;
+	// TODO: Copied from fully_connecte.txt
+	jumpNode.i2_src_or_const = 67; 
+	jumpNode.p_used = false;
+	jumpNode.p_src = 0;
+	jumpNode.init_out_used = false;
+	jumpNode.init_out = 0;
 
     for (int i = 0; i < partitionSize; i++) {
 		DODANode& parent = dodaNodes[i];
@@ -1604,12 +1620,14 @@ static void splitDFG(std::vector<DODANode>& dodaNodes) {
                 storeNode.init_out = 0;
                 dodaNodes.push_back(storeNode);
 
+				storeNodeIndices.push_back(storeNode.idx);
+
 				DODANode loadNode;
                 loadNode.idx = idx++;
                 loadNode.opcode = "LOAD";
                 loadNode.i1_used = true;
                 loadNode.i1_const_used = false;
-                loadNode.i1_src_or_const = storeNode.idx;
+                loadNode.i1_src_or_const = jumpNode.idx;
                 loadNode.i2_used = true;
                 loadNode.i2_const_used = true;
                 loadNode.i2_src_or_const = tmpIdx--;
@@ -1633,6 +1651,46 @@ static void splitDFG(std::vector<DODANode>& dodaNodes) {
 			}
 		}
 	}
+
+	while (storeNodeIndices.size() > 1) {
+		std::cout << "storeNodeIndices size: " << storeNodeIndices.size() << "\n";
+        std::vector<int> nextLevel;
+        for (size_t i = 0; i < storeNodeIndices.size(); i += 2) {
+            DODANode addNode;
+            addNode.idx = idx++;
+            addNode.opcode = "ADD";
+            addNode.i1_used = true;
+            addNode.i1_const_used = false;
+            addNode.i1_src_or_const = storeNodeIndices[i];
+            
+            if (i + 1 < storeNodeIndices.size()) {
+                addNode.i2_used = true;
+                addNode.i2_const_used = false;
+                addNode.i2_src_or_const = storeNodeIndices[i + 1];
+            } else {
+                // For odd number of nodes, use a constant as the second input
+                addNode.i2_used = true;
+                addNode.i2_const_used = true;
+                addNode.i2_src_or_const = 0;
+            }
+            
+            addNode.p_used = false;
+            addNode.p_src = 0;
+            addNode.init_out_used = false;
+            addNode.init_out = 0;
+            
+            dodaNodes.push_back(addNode);
+            nextLevel.push_back(addNode.idx);
+            
+            std::cout << "Added ADD node " << addNode.idx << " combining " 
+                      << storeNodeIndices[i] << " and " 
+                      << (i+1 < storeNodeIndices.size() ? storeNodeIndices[i+1] : 0) << "\n";
+        }
+        storeNodeIndices = nextLevel;
+    }
+
+	jumpNode.i1_src_or_const = storeNodeIndices[0];
+	dodaNodes.push_back(jumpNode);
 }
 
 static void printDODADot(const std::vector<DODANode>& dodaNodes, const std::string& filename) {
@@ -1641,7 +1699,7 @@ static void printDODADot(const std::vector<DODANode>& dodaNodes, const std::stri
     // Write the initial info
     ofs << "digraph DODAGraph {\n";
     ofs << "\tgraph [ nslimit = \"1000.0\",\n";
-    ofs << "\torientation = landscape,\n";
+    ofs << "\torientation = portrait,\n";
     ofs << "\tcenter = true,\n";
     ofs << "\tpage = \"8.5,11\",\n";
     ofs << "\tsize = \"10,7.5\" ];\n";
@@ -1680,7 +1738,7 @@ static void printDODADot(const std::vector<DODANode>& dodaNodes, const std::stri
 }
 
 void DFGPartPred::printNewDFGTxt() {
-	std::string tdraFileName = kernelname + "_PartPredDFG.txt";
+	std::string tdraFileName = kernelname + "_DODADFG.txt";
 
 	std::ofstream tdraFile;
 	tdraFile.open(tdraFileName.c_str());
@@ -1804,6 +1862,9 @@ void DFGPartPred::printNewDFGTxt() {
 		dodaNodes.push_back(dodaNode);
 	}
 
+	printDODADot(dodaNodes, kernelname + "_DODA_with_CMERGE_DODADFG.dot");
+
+	// Remove CMERGE nodes
 	int idx = 0;
 	for (DODANode& node : dodaNodes) {
 		if (!node.i1_const_used) {
@@ -1873,13 +1934,15 @@ void DFGPartPred::printNewDFGTxt() {
 		}
 	}
 
+	printDODADot(dodaNodes, kernelname + "_DODA_without_CMERGE_DODADFG.dot");
+
 	splitDFG(dodaNodes);
 
 	std::sort(dodaNodes.begin(),dodaNodes.end(), [](const DODANode& a, const DODANode& b) {
 		return a.idx < b.idx;
 	});
 
-	printDODADot(dodaNodes, kernelname + "_DODA_PartPredDFG.dot");
+	printDODADot(dodaNodes, kernelname + "_split_DODADFG.dot");
 
 	for (DODANode& node : dodaNodes) {
 		tdraFile << "IDX:" << node.idx << ", OPCODE:" << node.opcode;;
