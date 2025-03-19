@@ -1564,12 +1564,119 @@ struct DODANode {
 
 static bool hasEdge(DODANode& src, DODANode& dest) {
 	// TODO: how to buffer preds?
-	if (src.i1_used && !src.i1_const_used && src.i1_src_or_const == dest.idx)
+	if (dest.i1_used && !dest.i1_const_used && dest.i1_src_or_const == src.idx)
 		return true;
-	if (src.i2_used && !src.i2_const_used && src.i2_src_or_const == dest.idx)
+	if (dest.i2_used && !dest.i2_const_used && dest.i2_src_or_const == src.idx)
 		return true;
 
 	return false;
+}
+
+static void splitDFG(std::vector<DODANode>& dodaNodes) {
+	// Partition the graph into two halves
+	int numNodes = dodaNodes.size();
+    int partitionSize = numNodes / 2;
+	int idx = dodaNodes.size();
+	int tmpIdx = MEM_SIZE - 3;
+
+    for (int i = 0; i < partitionSize; i++) {
+		DODANode& parent = dodaNodes[i];
+		for (int j = partitionSize; j < numNodes; j++) {
+			DODANode& child = dodaNodes[j];
+            if (hasEdge(parent, child)) {
+				std::cout << "Found for edge from " << parent.opcode
+					<< " (" << parent.idx << ") to " << child.opcode
+					<< " (" << child.idx << ")\n";
+
+                DODANode storeNode;
+                storeNode.idx = idx++;
+                storeNode.opcode = "STORE";
+                storeNode.i1_used = true;
+                storeNode.i1_const_used = false;
+                storeNode.i1_src_or_const = parent.idx;
+                storeNode.i2_used = true;
+                storeNode.i2_const_used = true;
+                storeNode.i2_src_or_const = tmpIdx;
+				// TODO: Might need predication
+                storeNode.p_used = false;
+                storeNode.p_src = 0;
+                storeNode.init_out_used = false;
+                storeNode.init_out = 0;
+                dodaNodes.push_back(storeNode);
+
+				DODANode loadNode;
+                loadNode.idx = idx++;
+                loadNode.opcode = "LOAD";
+                loadNode.i1_used = true;
+                loadNode.i1_const_used = false;
+                loadNode.i1_src_or_const = storeNode.idx;
+                loadNode.i2_used = true;
+                loadNode.i2_const_used = true;
+                loadNode.i2_src_or_const = tmpIdx--;
+				// TODO: Might need predication
+                loadNode.p_used = false;
+                loadNode.p_src = 0;
+                loadNode.init_out_used = false;
+                loadNode.init_out = 0;
+                dodaNodes.push_back(loadNode);
+
+				std::cout << "Added store node " << storeNode.idx << " and load node " << loadNode.idx << "\n";
+
+				if (child.i1_used && !child.i1_const_used && child.i1_src_or_const == parent.idx) {
+					std::cout << "Updating child " << child.idx << " i1_src_or_const from " << parent.idx << " to " << loadNode.idx << "\n";
+					child.i1_src_or_const = loadNode.idx;
+				}
+				if (child.i2_used && !child.i2_const_used && child.i2_src_or_const == parent.idx) {
+					std::cout << "Updating child " << child.idx << " i2_src_or_const from " << parent.idx << " to " << loadNode.idx << "\n";
+					child.i2_src_or_const = loadNode.idx;
+				}
+			}
+		}
+	}
+}
+
+static void printDODADot(const std::vector<DODANode>& dodaNodes, const std::string& filename) {
+    std::ofstream ofs(filename);
+
+    // Write the initial info
+    ofs << "digraph DODAGraph {\n";
+    ofs << "\tgraph [ nslimit = \"1000.0\",\n";
+    ofs << "\torientation = landscape,\n";
+    ofs << "\tcenter = true,\n";
+    ofs << "\tpage = \"8.5,11\",\n";
+    ofs << "\tsize = \"10,7.5\" ];\n";
+
+    // Write nodes
+    for (const auto& node : dodaNodes) {
+        ofs << "\t\"" << node.idx << "\" [label=\"";
+        ofs << node.opcode << "\\nIDX:" << node.idx;
+        if (node.i1_const_used || node.i2_const_used) {
+            ofs << "\\nCONST:";
+            if (node.i1_const_used) {
+                ofs << node.i1_src_or_const;
+            }
+            if (node.i2_const_used) {
+                ofs << "," << node.i2_src_or_const;
+            }
+        }
+        ofs << "\"];\n";
+    }
+
+    // Write edges
+    for (const auto& node : dodaNodes) {
+        if (node.i1_used && !node.i1_const_used) {
+            ofs << "\t\"" << node.i1_src_or_const << "\" -> \"" << node.idx << "\" [color=blue, label=\"i1\"];\n";
+        }
+        if (node.i2_used && !node.i2_const_used) {
+            ofs << "\t\"" << node.i2_src_or_const << "\" -> \"" << node.idx << "\" [color=green, label=\"i2\"];\n";
+        }
+        if (node.p_used) {
+            ofs << "\t\"" << node.p_src << "\" -> \"" << node.idx << "\" [color=red, label=\"p\"];\n";
+        }
+    }
+
+    ofs << "}\n";
+    ofs.close();
 }
 
 void DFGPartPred::printNewDFGTxt() {
@@ -1766,9 +1873,13 @@ void DFGPartPred::printNewDFGTxt() {
 		}
 	}
 
+	splitDFG(dodaNodes);
+
 	std::sort(dodaNodes.begin(),dodaNodes.end(), [](const DODANode& a, const DODANode& b) {
 		return a.idx < b.idx;
 	});
+
+	printDODADot(dodaNodes, kernelname + "_DODA_PartPredDFG.dot");
 
 	for (DODANode& node : dodaNodes) {
 		tdraFile << "IDX:" << node.idx << ", OPCODE:" << node.opcode;;
